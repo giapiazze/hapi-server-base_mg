@@ -10,9 +10,9 @@ const pwdRegExp = new RegExp(pwdString);
 const UserSchema = {
 	name: 'UserSchemas',
 	rel: 'Users',
-	collection: 'user',
+	collection: 'User',
 	schemaQuery: () => {return Joi.object().keys({
-		_id: Joi.string().length(24),
+		id: Joi.string().length(24),
 		username: Joi.string().min(1).max(64).regex(usrRegExp),
 		email: Joi.string(),
 		isActive: Joi.boolean().valid(true, false),
@@ -21,7 +21,7 @@ const UserSchema = {
 		deletedAt: Joi.date(),
 	})},
 	schemaPayload: () => {return Joi.object().keys({
-		_id: Joi.string().length(24),
+		id: Joi.string().length(24),
 		username: Joi.string().min(3).max(64).regex(usrRegExp).required(),
 		password: Joi.string().min(3).max(64).regex(pwdRegExp).required(),
 		email: Joi.string().email().required(),

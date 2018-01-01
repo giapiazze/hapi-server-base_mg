@@ -1,5 +1,5 @@
 const _ = require('lodash');
-const DB = require('../../config/mongoose');
+const DB = require('../../config/mongoose-init');
 const SchemaUtility = require('../schema/schema_utility');
 const Pluralize = require('pluralize');
 
@@ -71,11 +71,23 @@ const ValidationBase = {
 	},
 
 	// STRING admitted in Field for all Attributes. Model Fields to select
-	fieldRegExp: (schema) => {
+	fieldRegExp: (modelName, relations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
+		let attributes = [];
 		let result = '';
 		let columns = '(';
 
-		Object.keys(schema.attributes).map((attr, index) => {
+		Object.keys(schema.tree).map((attr) => {
+			let skip = schema.tree[attr].exclude || false;
+			if (!skip && !schema.nested[attr] && !_.includes(relations, attr) && attr !== '_id' && attr !== '__v') {
+				attributes.push(attr);
+			}
+		});
+
+		attributes = _.orderBy(attributes);
+
+		attributes.forEach(function(attr, index){
 			if (index > 0) {
 				columns += '|';
 			} else {
@@ -85,7 +97,7 @@ const ValidationBase = {
 		});
 		columns += ')';
 
-		let prefix = '(?:{' + schema.name + '})?';
+		let prefix = '(?:{' + model.collection.name + '})?';
 
 		result += "^" + prefix + columns + "(," + columns + ")*$";
 
@@ -93,28 +105,37 @@ const ValidationBase = {
 	},
 
 	// Fields to apply sum, min & max. Model Fields to select
-	mathFieldRegExp: (schema) => {
+	mathFieldRegExp: (modelName, relations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
 		let columns = '(';
 
-		Object.keys(schema.attributes).map((attr, index) => {
-			let attribute = schema.attributes[attr];
-			let type = attribute.type.key;
+		Object.keys(schema.tree).map((attr) => {
 
-			if (attribute.type.key === 'INTEGER' || attribute.type.key === 'FLOAT' ||
-				attribute.type.key === 'REAL' || attribute.type.key === 'DOUBLE' ||
-				attribute.type.key === 'DECIMAL' || attribute.type.key === 'DATE') {
-
-				if (columns !== '(') {
-					columns += '|';
+			let skip = schema.tree[attr].exclude || false;
+			if (!skip && !schema.nested[attr] && !_.includes(relations, attr) && attr !== '_id' && attr !== '__v') {
+				let attribute = schema.tree[attr];
+				let type = attribute.name;
+				if (attribute.type && attribute.type.name) {
+					type = attribute.type.name;
+				} else if (attribute.type && attribute.type.schemaName) {
+					type = attribute.type.schemaName;
 				}
-				columns += attr;
+
+				if (type === 'Number' || type === 'Date') {
+
+					if (columns !== '(') {
+						columns += '|';
+					}
+					columns += attr;
+				}
 			}
 
 		});
 		columns += ')';
 
-		let prefix = '(?:{' + schema.name + '})?';
+		let prefix = '(?:{' + model.collection.name + '})?';
 
 		result += "^" + prefix + columns + "$";
 
@@ -122,36 +143,21 @@ const ValidationBase = {
 	},
 
 	// STRING admitted in withRelated for relations. Possible Relations to include
-	withRelatedRegExp: (schema) => {
+	withRelatedRegExp: (modelName, modelRelations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
 		let relations = '(';
 		let exclusion = [schema.name];
 
-		let schemaRelations = schema.associations;
-
-		Object.keys(schemaRelations).map((rel, index) => {
+		modelRelations.forEach(function(rel, index){
+			rel = _.replace(rel, ' ', '');
 			let localExclusion = [rel];
 			if (index > 0) {
 				relations += '|';
 			}
 			relations += rel;
 
-			let relModel = {};
-
-			if (DB.sequelize.models[Pluralize.singular(rel)]) {
-				relModel = DB.sequelize.models[Pluralize.singular(rel)];
-			} else if (DB.sequelize.models[rel]) {
-				relModel = DB.sequelize.models[rel];
-			}
-
-			if (Object.keys(relModel).length > 0) {
-				Object.keys(relModel.associations).map((relOfRel) => {
-					if (!_.includes(exclusion, relOfRel) && !_.includes(localExclusion, relOfRel)) {
-						relations += '|';
-						relations += rel + '.' + relOfRel;
-					}
-				});
-			}
 		});
 		relations += ')';
 
@@ -161,13 +167,14 @@ const ValidationBase = {
 	},
 
 	// STRING admitted in withCount for relations. Possible Relations to include (only ONE level)
-	withCountRegExp: (schema) => {
+	withCountRegExp: (modelName, modelRelations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
 		let relations = '(';
 
-		let schemaRelations = schema.associations;
-
-		Object.keys(schemaRelations).map((rel, index) => {
+		modelRelations.forEach(function(rel, index){
+			rel = _.replace(rel, ' ', '');
 			if (index > 0) {
 				relations += '|';
 			}
@@ -183,16 +190,83 @@ const ValidationBase = {
 	},
 
 	// STRING admitted in with Related Field (related tables attributes) for all possible Relationships
-	withRelatedFieldRegExp: (schema) => {
+	withRelatedFieldRegExp: (modelName, modelRelations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
-		let relations = SchemaUtility.relationFromSchema(schema, 2);
 
-		relations.forEach(function(rel, index){
+		modelRelations.forEach(function(rel, index){
+			rel = _.replace(rel, ' ', '');
+
+			let attributes = [];
+			let attributesList = '';
+			let relation = '';
+			let attribute = '';
+			let ref = '';
+			let secondRef = '';
+
+			if (_.includes(rel, '.')) {
+				rel = _.replace(rel, ' ', '');
+				relation = '{' + rel + '}';
+				let parts =_.split(rel, '.');
+				attribute =  schema.tree[_.first(parts)];
+				ref = attribute.ref;
+				if ((attribute[0] && attribute[0].ref) || (attribute.options && attribute.options.ref)) {
+					if (attribute.options && attribute.options.ref) {
+						ref = attribute.options.ref;
+					}
+					if (attribute[0] && attribute[0].ref) {
+						ref = attribute[0].ref;
+					}
+				}
+				let secondModel = DB.models[ref];
+				let secondSchema = secondModel.schema;
+				secondRef = _.last(parts);
+				attribute = secondSchema.tree[secondRef];
+				ref = attribute.ref;
+			} else {
+				relation = '{' + rel + '}';
+				attribute = schema.tree[rel];
+				ref = attribute.ref;
+			}
+
+
+			if ((attribute[0] && attribute[0].ref) || (attribute.options && attribute.options.ref)) {
+				if (attribute.options && attribute.options.ref) {
+					ref = attribute.options.ref;
+				}
+				if (attribute[0] && attribute[0].ref) {
+					ref = attribute[0].ref;
+				}
+			}
+
+			let relModel = DB.models[ref];
+			let relSchema = relModel.schema;
+
+			Object.keys(relSchema.tree).map((attr) => {
+
+				let skip = relSchema.tree[attr].exclude || false;
+				if (!skip && !relSchema.nested[attr] && !_.includes(modelRelations, attr) && attr !== '_id' && attr !== '__v') {
+					skip = relSchema.tree[attr].ref;
+					if ((relSchema.tree[attr][0] && relSchema.tree[attr][0].ref) || (relSchema.tree[attr].options && relSchema.tree[attr].options.ref)) {
+						if (relSchema.tree[attr].options && relSchema.tree[attr].options.ref) {
+							skip = relSchema.tree[attr].options.ref;
+						}
+						if (relSchema.tree[attr][0] && relSchema.tree[attr][0].ref) {
+							skip = relSchema.tree[attr][0].ref;
+						}
+					}
+					if (typeof skip === "undefined") {
+						attributes.push(attr);
+					}
+				}
+			});
+
+			attributes = _.orderBy(attributes);
+
 			let columns = '(';
 
-			let model = DB.sequelize.models[rel.model];
-
-			Object.keys(model.attributes).map((attr, index) => {
+			attributes.forEach(function(attr, index) {
 				if (index > 0) {
 					columns += '|';
 				}
@@ -201,30 +275,42 @@ const ValidationBase = {
 
 			columns += ')';
 
-			let prefix = '{' + rel.name + '}';
 			if (index > 0) {
 				result += '|';
 			}
-			result += "^" + prefix + columns + "(," + columns + ")*$";
+			result += "^" + relation + columns + "(," + columns + ")*$";
 		});
 
 		return new RegExp(result);
 	},
 
 	// STRING admitted in Sort Attributes
-	sortRegExp: (schema) => {
+	sortRegExp: (modelName, modelRelations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
+		let attributes = [];
 		let columns = '(';
 
-		Object.keys(schema.attributes).map((attr, index) => {
+		Object.keys(schema.tree).map((attr) => {
+			let skip = schema.tree[attr].exclude || false;
+			if (!skip && !schema.nested[attr] && !_.includes(modelRelations, attr) && attr !== '_id' && attr !== '__v') {
+				attributes.push(attr);
+			}
+		});
+
+		attributes = _.orderBy(attributes);
+
+		attributes.forEach(function(attr, index){
 			if (index > 0) {
 				columns += '|';
 			}
 			columns += attr;
 		});
+
 		columns += ')';
 
-		let prefix = '(?:{' + schema.tableName + '})?';
+		let prefix = '(?:{' + model.collection.name + '})?';
 		let direction = '(?:(\\+|\\-))?';
 
 		result += "^" + prefix + direction + columns + "(," + direction + columns + ")*$";
@@ -232,16 +318,80 @@ const ValidationBase = {
 		return new RegExp(result);
 	},
 
-	// STRING for with SORT
-	withSortRegExp: (schema) => {
+// STRING for with SORT
+	withSortRegExp: (modelName, modelRelations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
-		let relations = SchemaUtility.relationFromSchema(schema, 2);
 
-		relations.forEach(function(rel, index){
+		modelRelations.forEach(function(rel, index){
+			let attributes = [];
+			let relation = '';
+			let attribute = '';
+			let ref = '';
+			let secondRef = '';
+
+			if (_.includes(rel, '.')) {
+				rel = _.replace(rel, ' ', '');
+				relation = '{' + rel + '}';
+				let parts =_.split(rel, '.');
+				attribute =  schema.tree[_.first(parts)];
+				ref = attribute.ref;
+				if ((attribute[0] && attribute[0].ref) || (attribute.options && attribute.options.ref)) {
+					if (attribute.options && attribute.options.ref) {
+						ref = attribute.options.ref;
+					}
+					if (attribute[0] && attribute[0].ref) {
+						ref = attribute[0].ref;
+					}
+				}
+				let secondModel = DB.models[ref];
+				let secondSchema = secondModel.schema;
+				secondRef = _.last(parts);
+				attribute = secondSchema.tree[secondRef];
+				ref = attribute.ref;
+			} else {
+				relation = '{' + rel + '}';
+				attribute = schema.tree[rel];
+				ref = attribute.ref;
+			}
+
+
+			if ((attribute[0] && attribute[0].ref) || (attribute.options && attribute.options.ref)) {
+				if (attribute.options && attribute.options.ref) {
+					ref = attribute.options.ref;
+				}
+				if (attribute[0] && attribute[0].ref) {
+					ref = attribute[0].ref;
+				}
+			}
+
+			let relModel = DB.models[ref];
+			let relSchema = relModel.schema;
+
+			Object.keys(relSchema.tree).map((attr) => {
+
+				let skip = relSchema.tree[attr].exclude || false;
+				if (!skip && !relSchema.nested[attr] && !_.includes(modelRelations, attr) && attr !== '_id' && attr !== '__v') {
+					skip = relSchema.tree[attr].ref;
+					if ((relSchema.tree[attr][0] && relSchema.tree[attr][0].ref) || (relSchema.tree[attr].options && relSchema.tree[attr].options.ref)) {
+						if (relSchema.tree[attr].options && relSchema.tree[attr].options.ref) {
+							skip = relSchema.tree[attr].options.ref;
+						}
+						if (relSchema.tree[attr][0] && relSchema.tree[attr][0].ref) {
+							skip = relSchema.tree[attr][0].ref;
+						}
+					}
+					if (typeof skip === "undefined") {
+						attributes.push(attr);
+					}
+				}
+			});
+
+			attributes = _.orderBy(attributes);
+
 			let columns = '(';
-			let model = DB.sequelize.models[rel.model];
-
-			Object.keys(model.attributes).map((attr, index) => {
+			attributes.forEach(function(attr, index) {
 				if (index > 0) {
 					columns += '|';
 				}
@@ -250,32 +400,94 @@ const ValidationBase = {
 
 			columns += ')';
 
-			let prefix = '{' + rel.name + '}';
 			let direction = '(?:(\\+|\\-))?';
 			if (index > 0) {
 				result += '|';
 			}
-			result += "^" + prefix + direction + columns + "(," + direction + columns + ")*$";
+			result += "^" + relation + direction + columns + "(," + direction + columns + ")*$";
 		});
 
 		return new RegExp(result);
 	},
 
-	// STRING admitted in with FILTER Reletion Attributes filter
-	withFilterRegExp: (schema) => {
+	// STRING admitted in with FILTER Relation Attributes filter
+	withFilterRegExp: (modelName, relations) => {
+		let model = DB.models[modelName];
+		let schema = model.schema;
 		let result = '';
-		let attributes = '';
-		let relations = SchemaUtility.relationFromSchema(schema, 2);
 
 		relations.forEach(function(rel, index){
-			let relation = '{' + rel.name + '}';
-			let model = DB.sequelize.models[rel.model];
+			let attributes = [];
+			let attributesList = '';
+			let relation = '';
+			let attribute = '';
+			let ref = '';
+			let secondRef = '';
 
-			Object.keys(model.attributes).map((attr, index) => {
-				if (index > 0) {
-					attributes += '|'
+			if (_.includes(rel, '.')) {
+				rel = _.replace(rel, ' ', '');
+				relation = '{' + rel + '}';
+				let parts =_.split(rel, '.');
+				attribute =  schema.tree[_.first(parts)];
+				ref = attribute.ref;
+				if ((attribute[0] && attribute[0].ref) || (attribute.options && attribute.options.ref)) {
+					if (attribute.options && attribute.options.ref) {
+						ref = attribute.options.ref;
+					}
+					if (attribute[0] && attribute[0].ref) {
+						ref = attribute[0].ref;
+					}
 				}
-				attributes += '{' + attr + '}';
+				let secondModel = DB.models[ref];
+				let secondSchema = secondModel.schema;
+				secondRef = _.last(parts);
+				attribute = secondSchema.tree[secondRef];
+				ref = attribute.ref;
+			} else {
+				relation = '{' + rel + '}';
+				attribute = schema.tree[rel];
+				ref = attribute.ref;
+			}
+
+
+			if ((attribute[0] && attribute[0].ref) || (attribute.options && attribute.options.ref)) {
+				if (attribute.options && attribute.options.ref) {
+					ref = attribute.options.ref;
+				}
+				if (attribute[0] && attribute[0].ref) {
+					ref = attribute[0].ref;
+				}
+			}
+
+			let relModel = DB.models[ref];
+			let relSchema = relModel.schema;
+
+			Object.keys(relSchema.tree).map((attr) => {
+
+				let skip = relSchema.tree[attr].exclude || false;
+				if (!skip && !relSchema.nested[attr] && !_.includes(relations, attr) && attr !== '_id' && attr !== '__v') {
+					skip = relSchema.tree[attr].ref;
+					if ((relSchema.tree[attr][0] && relSchema.tree[attr][0].ref) || (relSchema.tree[attr].options && relSchema.tree[attr].options.ref)) {
+						if (relSchema.tree[attr].options && relSchema.tree[attr].options.ref) {
+							skip = relSchema.tree[attr].options.ref;
+						}
+						if (relSchema.tree[attr][0] && relSchema.tree[attr][0].ref) {
+							skip = relSchema.tree[attr][0].ref;
+						}
+					}
+					if (typeof skip === "undefined") {
+						attributes.push(attr);
+					}
+				}
+			});
+
+			attributes = _.orderBy(attributes);
+
+			attributes.forEach(function(attr, index) {
+				if (index > 0) {
+					attributesList += '|'
+				}
+				attributesList += '{' + attr + '}';
 			});
 
 			if (index > 0) {
@@ -285,27 +497,27 @@ const ValidationBase = {
 				if (index > 0) {
 					result += '|';
 				}
-				result += "^" + relation + Or + "(" + attributes + ")" + operator + ".+$";
+				result += "^" + relation + Or + "(" + attributesList + ")" + operator + ".+$";
 			});
 
 			likeOperators.forEach(function(operator){
 				result += '|';
-				result += "^" + relation + OrOrNot + "(" + attributes + ")" + operator + ".+$";
+				result += "^" + relation + OrOrNot + "(" + attributesList + ")" + operator + ".+$";
 			});
 
 			inOperator.forEach(function(operator){
 				result += '|';
-				result += "^" + relation + OrOrNot + "(" + attributes + ")" + operator + ".+$";
+				result += "^" + relation + OrOrNot + "(" + attributesList + ")" + operator + ".+$";
 			});
 
 			btwOperator.forEach(function(operator){
 				result += '|';
-				result += "^" + relation + OrOrNot + "(" + attributes + ")" + operator + ".+$";
+				result += "^" + relation + OrOrNot + "(" + attributesList + ")" + operator + ".+$";
 			});
 
 			nullOperator.forEach(function(operator){
 				result += '|';
-				result += "^" + relation + OrOrNot + "(" + attributes + ")" + operator + "$";
+				result += "^" + relation + OrOrNot + "(" + attributesList + ")" + operator + "$";
 			});
 		});
 

@@ -1,7 +1,7 @@
 const _ = require('lodash');
 const Joi = require('joi');
 const SchemaUtility = require('../utilities/schema/schema_utility');
-const DB = require('../config/mongoose');
+const DB = require('../config/mongoose-init');
 
 // Only ONE element follows
 const Operator = ['{=}', '{<}', '{<=}', '{>}', '{>=}', '{<>}', '{like}', '{%like}', '{like%}'];
@@ -310,7 +310,7 @@ const PreHandlerBase = {
 									}
 								});
 							}
-							schemaClone = DB[rel.model];
+							schemaClone = DB.models[rel.model];
 						}
 					});
 				});

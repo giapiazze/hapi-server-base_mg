@@ -1,32 +1,50 @@
-module.exports = function(sequelize, DataTypes) {
+const Timestamps = require('mongoose-timestamp');
+const SoftDelete = require('mongoose-delete');
 
-	let Realm = sequelize.define('Realm', {
+
+module.exports = function (mongoose) {
+	const ModelName = "realm";
+	const Types = mongoose.Schema.Types;
+	const Schema = new mongoose.Schema({
 
 			// ATTRIBUTES
 			name: {
-				type: DataTypes.STRING,
+				type: Types.String,
 				unique: true,
-				allowNull: false,
-				validation: {
-					len: [3, 64]
-				},
+				required: true,
+				minlength: 3,
+				maxlength: 64,
 			},
 			description: {
-				type: DataTypes.STRING,
+				type: Types.String,
 				allowNull: true,
+				required: true,
 			},
+
+
 		},
-		{
-			tableName: 'realms',
-			paranoid: true,
+		{collection: ModelName,
+			toObject: {
+				virtuals: true
+			},
+			toJSON: {
+				virtuals: true
+			}
 		},
 	);
 
-	// Class Method
-	Realm.associate = function (models) {
-		Realm.belongsToMany(models.Role, { through: models.RealmsRolesUsers });
-		Realm.belongsToMany(models.User, { through: models.RealmsRolesUsers });
-	};
+	// VIRTUAL RELATIONS
+	Schema.virtual('realmRoleUsers', {
+		ref: 'RealmRoleUser', // The model to use
+		localField: '_id', // Find people where `localField`
+		foreignField: 'realm', // is equal to `foreignField`
+		// If `justOne` is true, 'members' will be a single doc as opposed to
+		// an array. `justOne` is false by default.
+		justOne: false
+	});
 
-	return Realm;
+	Schema.plugin(Timestamps);
+	Schema.plugin(SoftDelete, { deletedAt : true });
+
+	return Schema;
 };

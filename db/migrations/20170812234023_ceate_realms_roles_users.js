@@ -1,6 +1,6 @@
 
 exports.up = function(knex, Promise) {
-	return knex.schema.createTable('realms_roles_users', function(tbl) {
+	return knex.schema.createTable('realm_role_user', function(tbl) {
 		tbl.increments('id').primary();
 
 		// Foreign Keys
@@ -29,7 +29,7 @@ exports.up = function(knex, Promise) {
 
 exports.down = function(knex, Promise) {
 	return knex.schema
-		.dropTable('realms_roles_users');
+		.dropTable('realm_role_user');
 };
 
 // La tabella di JOIN tripla per realizzare la N-N-N così strutturata dovrebbe

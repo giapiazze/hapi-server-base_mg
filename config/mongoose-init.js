@@ -1,7 +1,10 @@
 const Mongoose = require('mongoose');
+const Q = require('q');
 const Dotenv = require('dotenv');
 const FS = require('fs');
 const _ = require('lodash');
+const Log = require('./../utilities/logging/logging');
+const Chalk = require("chalk");
 
 const Env       = process.env.NODE_ENV || 'development';
 const Config    = require('../config/database')[Env];
@@ -27,17 +30,23 @@ let getFiles = function(dir, fileList = []) {
 	return fileList;
 };
 
+Mongoose.Promise = Q.Promise;
 Mongoose.connect(Config.url);
 
 let modelFiles = getFiles('api');
 
 modelFiles.forEach(function(modelFile){
-	if (modelFile.name === 'User') {
-		let model = require(modelFile.path);
-		Mongoose.model(modelFile.name, model(Mongoose));
-		let schema = require(modelFile.schema);
-		Mongoose[schema.name] = schema;
-	}
+	let model = require(modelFile.path);
+	Mongoose.model(modelFile.name, model(Mongoose));
+	let schema = require(modelFile.schema);
+	Mongoose[schema.name] = schema;
 });
+
+Object.keys(Mongoose.models).map((model) => {
+	Log.mongooseLogger.info(Chalk.cyan(model + ' Initialized'));
+});
+
+let user = new Mongoose.models.User({firstName: 'Giacomo', lastName: 'Piazzesi'});
+let realm = new Mongoose.models.Realm({name: 'WebApp', description: 'Web App Realm'});
 
 module.exports = Mongoose;

@@ -13,19 +13,21 @@ module.exports.register = (server, options, next) => {
 			config: {
 				handler: UserHandlers.userFindAll,
 				auth:
-					{
-						scope: ['GameApp-SuperAdmin', 'GameApp-Admin'],
-					},
+					false,
+				// {
+				// 	scope: ['GameApp-SuperAdmin', 'GameApp-Admin'],
+				// },
 				tags: ['api', 'Users'],
 				description: 'Users List',
 				notes: ['Returns Users list filtered by query (url), paginated and sorted. Default pageSize: 10 <br>' +
 								'User First Level Relations: ' + UserValidations.FLRelations + '<br>' +
-								'User Second Level Relations: ' + UserValidations.SLRelations + '<br>'],
+								'User Second Level Relations: ' + UserValidations.SLRelations + '<br>' +
+								'User attributes: ' + UserValidations.Attributes + '<br>'],
 				validate: {
 					query: UserValidations.query,
-					headers: HeaderValidation.header,
+					// headers: HeaderValidation.header,
 				},
-				pre: UserPre,
+				// pre: UserPre,
 			},
 		}
 	]);

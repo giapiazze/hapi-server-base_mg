@@ -1,4 +1,6 @@
 const Hapi = require('hapi');
+const Log = require('./utilities/logging/logging');
+const Chalk = require("chalk");
 
 const Plugins = require('./plugins');
 const Routes = require('./routes');
@@ -34,19 +36,19 @@ server.realm.modifiers.route.prefix = '/api';
 // Auth module
 server.register(Auth, (err) => {
 		if (err) {
-			server.log('error', 'Failed to register auth: ' + err);
+			Log.apiLogger.error(Chalk.red('Failed to register auth: ' + err));
 		}
 
 		// Plugins
 		server.register(Plugins, (err) => {
 			if (err) {
-				server.log('error', 'Failed to load plugin:' + err);
+				Log.apiLogger.error(Chalk.red('Failed to load plugin:' + err));
 			}
 
 			// Routes
 			server.register(Routes, (err) => {
 				if (err) {
-					server.log('error', 'Failed to register routes: ' + err);
+					Log.apiLogger.error(Chalk.red('Failed to register routes: ' + err));
 				}
 
 				// Start the server
@@ -56,10 +58,10 @@ server.register(Auth, (err) => {
 						throw err;
 					}
 
-					server.log('info', 'Auth loaded');
-					server.log('info', 'Plugins loaded');
-					server.log('info', 'Routes loaded');
-					server.log('info', 'Server running at: ' + server.info.uri);
+					Log.apiLogger.info(Chalk.black('Auth loaded'));
+					Log.apiLogger.info(Chalk.black('Plugins loaded'));
+					Log.apiLogger.info(Chalk.black('Routes loaded'));
+					Log.apiLogger.info(Chalk.black('Server running at: ' + server.info.uri));
 				})
 			})
 		})

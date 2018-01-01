@@ -1,7 +1,7 @@
 const Boom = require('boom');
 const Bcrypt = require('bcrypt');
 const Token = require('../../../../../utilities/token/token');
-const DB = require('../../../../../config/mongoose');
+const DB = require('../../../../../config/mongoose-init');
 
 const Config = require('../../../../../config/config');
 const AUTH_STRATEGIES = Config.get('/constants/AUTH_STRATEGIES');

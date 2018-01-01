@@ -1,11 +1,11 @@
 const Boom = require('boom');
 const _ = require('lodash');
 
-const DB = require('../../../../../config/mongoose');
+const DB = require('../../../../../config/mongoose-init');
 const PreHandlerBase = require('../../../../pre_handler_base');
 const UserValidation = require('../../../model/user_validations');
 
-const User = DB.User;
+const User = DB.models.User;
 
 const UserPre = [
 	{
@@ -90,14 +90,15 @@ const UserPre = [
 			});
 
 			let found = false;
-			Object.keys(User.attributes).map((attr) => {
+			let schema = User.schema;
+			Object.keys(schema.paths).map((attr) => {
 				if (_.includes(requestData.queryData.fields, attr)) {
 					found = true;
 				}
 			});
 
 			if (found === false) {
-				Object.keys(User.attributes).map((attr) => {
+				Object.keys(schema.paths).map((attr) => {
 					requestData.queryData.fields.push(attr);
 				});
 			}
