@@ -150,13 +150,26 @@ function _list(model, query) {
 		let mongooseQuery = {};
 		let count = "";
 		if (query.$count) {
+			let totalCount = 0;
+			let filteredCount = 0;
 			mongooseQuery = model.count();
-			mongooseQuery = QueryHelper.createMongooseQuery(model, query, mongooseQuery).lean();
+			mongooseQuery = QueryHelper.createMongooseQuery(model, {}, mongooseQuery).lean();
 			return mongooseQuery.exec()
-				.then(function(result) {
+				.then(function (result) {
+					totalCount = result;
 					Log.apiLogger.info("Result: %s", JSON.stringify(result));
-					return result;
-				})
+					mongooseQuery = QueryHelper.createMongooseQuery(model, query, mongooseQuery).lean();
+					return mongooseQuery.exec()
+						.then(function (result) {
+							filteredCount = result;
+							Log.apiLogger.info("Result: %s", JSON.stringify(result));
+							const items = {
+								total: totalCount,
+								filtered: filteredCount,
+							};
+							return { items: items };
+						})
+				});
 		}
 
 		mongooseQuery = model.find();
@@ -210,7 +223,7 @@ function _list(model, query) {
 
 
 						const pages = {
-							current: query.page || 1,
+							current: query.$page || 1,
 							prev: 0,
 							hasPrev: false,
 							next: 0,
@@ -218,13 +231,13 @@ function _list(model, query) {
 							total: 0
 						};
 						const items = {
-							limit: query.pageSize,
-							begin: ((query.page * query.pageSize) - query.pageSize) + 1,
-							end: query.page * query.pageSize,
+							limit: query.$pageSize,
+							begin: ((query.$page * query.$pageSize) - query.$pageSize) + 1,
+							end: query.$page * query.$pageSize,
 							total: count
 						};
 
-						pages.total = Math.ceil(count / query.pageSize);
+						pages.total = Math.ceil(count / query.$pageSize);
 						pages.next = pages.current + 1;
 						pages.hasNext = pages.next <= pages.total;
 						pages.prev = pages.current - 1;

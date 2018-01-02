@@ -292,9 +292,9 @@ const ValidationBase = {
 		let attributes = [];
 		let columns = '(';
 
-		Object.keys(schema.tree).map((attr) => {
-			let skip = schema.tree[attr].exclude || false;
-			if (!skip && !schema.nested[attr] && !_.includes(modelRelations, attr) && attr !== '_id' && attr !== '__v') {
+		Object.keys(schema.paths).map((attr) => {
+			let skip = schema.paths[attr].options.exclude || false;
+			if (!skip && !schema.nested[attr] && !_.includes(modelRelations, attr) && attr !== '__v') {
 				attributes.push(attr);
 			}
 		});
@@ -311,7 +311,7 @@ const ValidationBase = {
 		columns += ')';
 
 		let prefix = '(?:{' + model.collection.name + '})?';
-		let direction = '(?:(\\+|\\-))?';
+		let direction = '(?:(\\-))?';
 
 		result += "^" + prefix + direction + columns + "(," + direction + columns + ")*$";
 

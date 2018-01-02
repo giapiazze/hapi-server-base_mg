@@ -45,10 +45,34 @@ const filters = {
 			.example('{<>}luigi.rossi@eataly.it'),
 		Joi.string().email(),
 	),
+	firstName: Joi.alternatives().try(
+		Joi.array().items(
+			Joi.string().min(3).regex(ValidationBase.filterRegExp())
+				.example('{like}Luigi'),
+		).description('the first name: name vs [{=}Luigi,{<>}Gino,{like}olo]')
+			.example(['{like}Luigi', '{like}Luigi']),
+		Joi.string().min(3).regex(ValidationBase.filterRegExp())
+			.example('{<>}Mario,Marco'),
+	),
+	lastName: Joi.alternatives().try(
+		Joi.array().items(
+			Joi.string().min(3).regex(ValidationBase.filterRegExp())
+				.example('{like}Rossi'),
+		).description('the last name: last name vs [{=}Rossi,{<>}Bianchi,{like}ini]')
+			.example(['{like}Bossi', '{like}Bianchi']),
+		Joi.string().min(3).regex(ValidationBase.filterRegExp())
+			.example('{<>}Rossi,Tardelli'),
+	),
 	isActive: Joi.alternatives().try(
 		Joi.array().description('the user active: true, [true, false]')
 			.items(Joi.boolean().valid(true, false)),
-		Joi.boolean().description('the user active: true, [true, false]').valid(true, false)),
+		Joi.boolean().description('the user active: true, [true, false]').valid(true, false)
+	),
+	deleted: Joi.alternatives().try(
+		Joi.array().description('the user is deleted: true, [true, false]')
+			.items(Joi.boolean().valid(true, false)),
+		Joi.boolean().description('the user is deleted: true, [true, false]').valid(true, false)
+	),
 	createdAt: Joi.alternatives().try(
 		Joi.array().description('the creation date: 2017-08-15[ 09:00:00] vs [{btw}2017-08-17 09:00:00,2017-08-17 23:30:00]')
 			.items(Joi.string().max(255)
@@ -86,15 +110,15 @@ const pagination = {
 
 const sort = {
 	$sort: Joi.alternatives().try(
-		Joi.array().description('sort column: [{user}][+,-]id,[{user}][+,-]username vs [-id, -username]')
+		Joi.array().description('sort column: [{user}][-]id,[{user}][-]username vs [-_id, username]')
 			.items(
 				Joi.string().max(255)
 					.regex(ValidationBase.sortRegExp(User.modelName, FLRelations.split(',')))
 					.example('-createdAt'))
-			.example(['{user}-email','-username']),
+			.example(['{user}-email','username']),
 		Joi.string().max(255)
 			.regex(ValidationBase.sortRegExp(User.modelName, FLRelations.split(',')))
-			.example('{user}-email'),
+			.example('-username'),
 	),
 };
 

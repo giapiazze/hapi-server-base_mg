@@ -390,12 +390,12 @@ module.exports = {
 	 * @returns {*}: The updated mongoose query.
 	 */
 	setSort: function (query, mongooseQuery) {
-		if (query.sort) {
-			if (Array.isArray(query.sort)) {
-				query.sort = query.sort.join(' ');
+		if (query.$sort) {
+			if (Array.isArray(query.$sort)) {
+				query.$sort = query.$sort.join(' ');
 			}
-			mongooseQuery.sort(query.sort);
-			delete query.sort;
+			mongooseQuery.sort(query.$sort);
+			delete query.$sort;
 		}
 		return mongooseQuery;
 	},
